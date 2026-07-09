@@ -1,5 +1,5 @@
 # Cloudflare Worker 配置 —— Wrangler 的"唯一事实来源"
-name = "reminder-hub"                  # Worker 名称，部署后的默认域名前缀。想改名字改这里
+name = "ios-calendar-ics"                  # Worker 名称，部署后的默认域名前缀。想改名字改这里
 main = "src/worker-entry.js"           # 入口文件
 compatibility_date = "2026-06-30"      # 运行时兼容性基线日期
 
