@@ -1,0 +1,13 @@
+# Cloudflare Worker 配置 —— Wrangler 的"唯一事实来源"
+name = "reminder-hub"                  # Worker 名称，部署后的默认域名前缀。想改名字改这里
+main = "src/worker-entry.js"           # 入口文件
+compatibility_date = "2026-06-30"      # 运行时兼容性基线日期
+
+# ---------- email 模型需要的 KV 绑定 ----------
+# 启用 email 模型前的一次性操作(不启用则保持注释，不影响 legacy/cycle 正常部署):
+#   1. Cloudflare 后台 -> Storage & Databases -> KV -> Create namespace，名字随意(如 repay-kv)
+#   2. 复制它的 Namespace ID，替换下面的 id 值
+#   3. 取消下面三行注释，push 部署
+# [[kv_namespaces]]
+# binding = "REPAY_KV"
+# id = "把这里替换成你的KV命名空间ID"

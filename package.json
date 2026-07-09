@@ -1,0 +1,12 @@
+{
+  "name": "reminder-hub",
+  "version": "4.5.0",
+  "type": "module",
+  "private": true,
+  "description": "提醒中枢框架:日历为本体、闹钟为附加输出;config/ 用户领地与 src/ 框架领地分离;内置 card + checkin 两域",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "test": "node test/hub.test.mjs"
+  }
+}
