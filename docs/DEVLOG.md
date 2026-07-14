@@ -4,6 +4,62 @@
 
 ---
 
+## v5.0 · 2026-07-14 —— 上游接入 + 破坏性词汇统一 + 金标准 v2 + 名称统一
+
+**背景**:① 假期数据/判定与 alarm-api 各自维护两套,workdays-core 已就位(alarm-api 已接);
+② 上游 v2 起词汇"一词一义"(official 等别名移除),与本库 v4.1/v4.3 契约冲突,用户裁决:
+**破坏性重构,词汇整体切到上游规范**;③ 例行体检发现两处实伤(见"决策 3");④ 名称混用
+(仓库 calendar-api / 文档 reminder-hub / Worker ios-calendar-ics),用户裁决统一为 **calendar-api**。
+
+**决策**
+
+1. **假期整层外包上游**:删除 `src/holidays/` 全部五文件,中枢直接
+   `import { createHolidayHub } from '@ivanphz/workdays-core'`(签名/行为逐语义等价,
+   含 Date 入参、空列表默认 CN、多国叠加、未知地区周末兜底)。本库自此**零假期数据、
+   零判定实现**;换数据源/修数据/加国家 = 上游发版,经 update-core.yml 自动升级部署。
+   **上游可见性(用户点名要求)**:`hub.loadLogs` 逐行进诊断;`hub.coverage` 中 `ok=false`
+   的地区×年份渲染为醒目告警行(⚠️ 无真实数据,按纯周末兜底)——上游出错/缺口/词汇写错,
+   一律在日历诊断事件显形,绝不静默。
+2. **词汇破坏性统一(用户裁决)**:`official` 废除 → 显式写法 `bank`;`?cnRule=bank|market`
+   (缺省 bank,行为=原 official 分毫未动);HK 唯一口径 `public`,v4.3 立的
+   `'HK:market'/'HK:official'` 等价别名**随之废除**(该决策就此作废;当年"防被误判未实现"
+   的目的由本条日志接棒)。旧词不崩:上游对未知口径退默认+loadLogs 告警,中枢对
+   `?cnRule=official` 额外产出诊断告警行"已按 bank 处理"。**响亮降级,静默零容忍。**
+3. **金标准 v2(根治两处实伤)**:体检发现 v4 测试 ① 金标准 import 写死了上次沙箱的绝对
+   路径(换环境必挂);② 74 项中 5 项假红 —— 原因是 repayment-cal 与本库的 config 各自
+   演化(原版也改成了 exact+合并、注释了一个账户),A 组把"配置相等"错误地当成了前提。
+   新设计三件套:**golden 内置**(repayment-cal 终版 src 逐字节冻结进 test/golden/,原仓库
+   退役归档);**配置共享**(golden 的 config.js 换成指向 config/card.js 的垫片 —— 金标准
+   自此只对比逻辑,用户改配置永不再打破 A 组);**事实共享**(测试用上游 listDays/exportIcs
+   把同一份 CN/HK 数据喂给 golden 的 fetch;US 两边独立算 → A 组顺带交叉验证上游 US 算法
+   ≡ 原版 us.js)。副产品:金标准从"两边断网退化对比"升级为"真实假期避让下的对比",
+   覆盖强度提升。B5 从抽查升级为**五文件字节级看守**。
+   **golden 的职责定位(用户追问后钉死)**:测试基建(oracle/字节看守/US 交叉验证),CI 每次
+   执行;**历史存档职责归 GitHub 已归档的 repayment-cal 原仓库**。刻意不做"CI 从归档仓库
+   克隆"——那会重新引入外部耦合(可改名/可删除/要联网要凭据),正是本条刚根治的脆弱性;
+   测试必须密闭自足,60KB 换这个,值。
+4. **测试进流水线(fail-closed)**:deploy.yml 改为 npm ci → 83 项测试 → deploy,红灯不部署。
+   paths 补 `config/**`(旧文件漏了它:改配置竟不触发部署)与 `package.json` /
+   `package-lock.json`(上游自动升级只动这两个文件,不加则升级永不部署 —— 上游手册点名的
+   头号坑),外加 `test/**`。
+5. **命名定死**:GitHub 仓库/项目名 = **calendar-api**(package.json / 文档 / PRODID /
+   ICS 文件名统一,"reminder-hub" 自此只是曾用名);Cloudflare Worker 部署名**保持现役的
+   `ios-calendar-ics` 不变,刻意不改**(ios-*-ics 命名模式与原信用卡项目的 `ios-repay-ics`
+   同款,但不是同一个 Worker)—— 同名部署 = 原地更新,订阅 URL / KV / Secret /
+   Email Routing 零迁移;改名收益为零、成本是全套迁移(备忘见 UPGRADE-V5 §4)。
+   过程教训一条:部署名以 **wrangler.toml 为准质证**口头信息(本次口头两度与文件不符,
+   最终回归文件原值;顺带纠正"沿用原项目同名"的口误 —— 原项目查证为 ios-repay-ics)——
+   以后任何"线上叫什么"的结论,先看文件、再看 Cloudflare 后台,口头记忆排最后。
+6. **文档补全(用户 8 条要求的 1/3/4)**:新增 PLUGIN-CARD.md(信用卡域自足手册,收编
+   repayment-cal README 的设计取舍/演进指南/排查清单三节精华)、DOWNSTREAM.md(下游
+   alarm-api 能力册,插件作者视角)、UPGRADE-V5.md(一次性迁移 runbook);DEVGUIDE 假期节
+   改为"上游供给",README/ARCHITECTURE 全面改版。
+
+**测试**:83/83(A 金标准 6 参数组 · B 五点 · C 杂项 · D 领地/视图 · E CN 双口径(真实归档)
+· F US 双日历 · G HK+旧别名响亮降级 · H 三叠配方 · I 插件契约)。
+
+---
+
 ## v4 · 2026-07-08 —— 领地分离 + 视图组合 + "日历本体"定调
 
 **背景**:v3 把用户配置混在 `src/` 框架树里,框架更新会冲掉用户改动;信用卡默认值被上一版

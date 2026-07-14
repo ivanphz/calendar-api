@@ -1,5 +1,12 @@
 # Cloudflare Worker 配置 —— Wrangler 的"唯一事实来源"
-name = "ios-calendar-ics"                  # Worker 名称，部署后的默认域名前缀。想改名字改这里
+#
+# 命名约定(v5 定死):GitHub 仓库 / 项目称呼 = calendar-api;
+# Cloudflare Worker 部署名 = ios-calendar-ics(现役名,ios-*-ics 家族,同款模式如原
+# 信用卡项目的 ios-repay-ics)。⚠️ name 是运维锚点:订阅 URL、KV 绑定、Secret、
+# Email Routing 全挂在它上面 —— 保持不变 = 每次 deploy 原地更新、零迁移。
+# 别为"名字好看"改它;项目怎么称呼是文档的事,不是部署的事。
+# (部署名以本文件与 Cloudflare 后台为准,不靠记忆 —— DEVLOG v5.0 决策 5。)
+name = "ios-calendar-ics"
 main = "src/worker-entry.js"           # 入口文件
 compatibility_date = "2026-06-30"      # 运行时兼容性基线日期
 

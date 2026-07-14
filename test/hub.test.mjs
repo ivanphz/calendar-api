@@ -1,25 +1,52 @@
-// 测试:重点验证 (a) 信用卡 VEVENT 与原项目输出逐行等价 (b) 用户五点要求
+// ============================================================================
+// calendar-api 测试套件 (v5)
+// ============================================================================
+// 验证四件事:
+//   (a) 信用卡 VEVENT 与原项目(repayment-cal 终版,冻结于 test/golden/)逐行等价
+//   (b) 框架契约:领地/视图组合/闹钟策略/故障隔离/字段透传
+//   (c) 假期口径(v5 词汇: bank|market|public;official 已废除)与三叠配方
+//   (d) 上游 workdays-core 的响亮降级在本库可见(告警不静默)
+//
+// ── v5 金标准设计(取代 v4 的\"两仓库各自断网\"方案) ─────────────────────────
+// 1. golden 内置:原项目 src 全量冻结在 test/golden/,不再依赖外部路径
+//    (v4 曾写死一个沙箱绝对路径,换环境即失效 —— 根治)。
+// 2. 配置共享:golden 的 config.js 是指向 config/card.js 的垫片,两边永远同账户
+//    同默认值 → 金标准只对比【逻辑】,用户改配置不再打破 A 组(v4 曾因两仓库
+//    配置漂移而假红 —— 根治)。
+// 3. 事实共享:中枢的假期来自 workdays-core(打包内置,零联网);golden 仍走 fetch,
+//    本文件用 stub 把【core 的同一份事实】喂给它(CN=listDays;HK=exportIcs)。
+//    两边同事实 → 对比是纯逻辑等价;US 两边各自独立计算(golden=verbatim us.js,
+//    中枢=core 的 USA 数据集) → A 组顺带天天交叉验证上游 US 算法与原版一致。
 process.env.TZ = 'UTC'; // Cloudflare Workers 运行时为 UTC,本地对齐
 
-// 断网 stub:假期源全部失败 → weekend-only 降级(两边一致,可公平对比)
-globalThis.__cnDays = null; // 置为数组时,CN 源返回构造数据(用于双口径测试);其余源始终失败
+import { createHolidayHub, exportIcs } from '@ivanphz/workdays-core';
+import hubWorker from '../src/worker-entry.js';
+import originalWorker from './golden/src/worker-entry.js';
+
+// ---- 喂数 stub:golden 的 CN/HK 抓取一律由 core 事实供给;其余源(不存在)一律失败 ----
+const feedHub = await createHolidayHub(['CN', 'HK'], [2025, 2026, 2027, 2028]);
+const cnDaysOf = (year) => feedHub.listDays('CN').filter(d => d.date.startsWith(String(year)));
+const hkIcsText = exportIcs(feedHub, 'HK');
 globalThis.fetch = async (url) => {
-  if (globalThis.__cnDays && String(url).includes('holiday-cn'))
-    return { ok: true, status: 200, json: async () => ({ days: globalThis.__cnDays }), text: async () => '' };
+  const u = String(url);
+  if (u.includes('holiday-cn')) {
+    const year = (u.match(/(\d{4})\.json/) || [])[1];
+    return { ok: true, status: 200, json: async () => ({ days: cnDaysOf(year) }), text: async () => '' };
+  }
+  if (u.includes('1823.gov.hk')) {
+    return { ok: true, status: 200, json: async () => ({}), text: async () => hkIcsText };
+  }
   return { ok: false, status: 503, json: async () => ({}), text: async () => '' };
 };
-
-import hubWorker from '../src/worker-entry.js';
-// 原项目(最新版)直接引入,作为"金标准"
-import originalWorker from '/home/claude/cc-new/repayment-cal-main/src/worker-entry.js';
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { c ? pass++ : (fail++, console.log('  ❌ ' + m)); };
 const env = {}; // 无 KV → email 相关自然为空(与原项目行为一致)
 const call = (w, qs) => w.fetch(new Request('https://x/' + qs), env, {});
+const D = (str) => { const [a, b, c] = str.split('-').map(Number); return new Date(a, b - 1, c, 12, 0, 0); };
 
 // ============ A. 金标准对比:信用卡 VEVENT 逐行等价 ============
-console.log('A. 信用卡输出 vs 原项目(逐行对比 VEVENT 段)');
+console.log('A. 信用卡输出 vs 原项目(逐行对比 VEVENT 段;共享配置+共享事实)');
 const extractEvents = (text) => {
   const L = text.split('\r\n');
   const i = L.indexOf('BEGIN:VEVENT'), j = L.lastIndexOf('END:VEVENT');
@@ -37,18 +64,11 @@ const stripDebug = (lines) => {
 // DTSTAMP 随生成时刻变化,归一化后对比
 const norm = (lines) => lines.map(l => l.startsWith('DTSTAMP:') ? 'DTSTAMP:X' : l);
 
-// [原项目参数, 中枢参数] 成对:两边显式对齐同一组生效值
-const pairs = [
-  ['?mode=exact&merge=1', ''],                              // 中枢新默认(exact+合并) vs 原项目显式同参
-  ['', '?mode=allday&merge=0'],                             // 原项目默认(allday+不合并) vs 中枢显式同参
-  ['?mode=exact&merge=1&past=1&future=4', '?past=1&future=4'],
-  ['?mode=exact&merge=1&exAlarms=5,0', '?exAlarms=5,0'],
-  ['?mode=exact&merge=1&ch=8&cm=15', '?ch=8&cm=15']
-];
-for (const [origQs, hubQs] of pairs) {
-  const qs = `orig[${origQs||'默认'}] hub[${hubQs||'默认'}]`;
-  const orig = await (await call(originalWorker, origQs)).text();
-  const mine = await (await call(hubWorker, (hubQs ? hubQs + '&' : '?') + 'cal=card&debug=0')).text();
+// 配置共享后,两边直接跑【同一组参数】(v4 的成对错位对齐已无必要)
+const paramSets = ['', '?mode=allday&merge=0', '?past=1&future=4', '?exAlarms=5,0', '?ch=8&cm=15', '?mode=exact&merge=0'];
+for (const qs of paramSets) {
+  const orig = await (await call(originalWorker, qs)).text();
+  const mine = await (await call(hubWorker, (qs ? qs + '&' : '?') + 'cal=card&debug=0')).text();
   const a = norm(stripDebug(extractEvents(orig)));
   const b = norm(extractEvents(mine));
   const same = a.length === b.length && a.every((l, i) => l === b[i]);
@@ -92,7 +112,7 @@ ok(t.includes('⚙️ 提醒中枢诊断报告'), '默认含诊断事件');
 ok(t.includes('【💳 信用卡域】') && t.includes('【活跃账户'), '含信用卡域原版报告(账户清单)');
 ok(t.includes('显示模式: exact') && t.includes('同日合并: 是'), '写明你的默认(exact/合并)');
 ok(t.includes('【⏰ 签到域】') && t.includes('闹钟策略'), '含签到域报告与闹钟策略说明');
-ok(t.includes('【假期数据源状态】'), '含假期源状态');
+ok(t.includes('【假期数据源状态 · 上游 workdays-core】'), '含上游数据源状态段');
 
 console.log('B4. 签到闹钟:默认准点一条,与日历 VALARM 脱钩');
 j = JSON.parse(await (await call(hubWorker, '?cal=checkin&format=json&testDate=2026-07-08')).text());
@@ -109,10 +129,18 @@ const evLine = dts.find(v => v.startsWith(wantYmd));
 ok(!!evLine && evLine.slice(9, 13) === a0.time.replace(':', ''), `闹钟=对应事件准点(事件${evLine} vs 闹钟${a0.date} ${a0.time})`);
 
 console.log('B5. 原项目文件逐字节保留(含注释卡/停用卡)');
-// (文件级 cmp 已在搬运时验证 ✓)运行级再抽查:卓越5136已启用应出现在事件中
+// 运行级抽查:启用/停用账户状态与终版 config 一致
 t = await (await call(hubWorker, '?cal=card&debug=0&mode=exact&merge=0')).text();
 ok(t.includes('Pulse') && t.includes('Red'), '启用账户(Pulse×2/Red)在事件中');
 ok(!t.includes('卓越'), '卓越 isActive:false → 正确地不出现在事件中');
+// 文件级:五个逻辑文件与 golden 冻结版逐字节一致(防止未来"顺手改 verbatim 文件")
+{
+  const fs = await import('fs');
+  const rd = (p) => fs.readFileSync(new URL(p, import.meta.url));
+  for (const f of ['repay-engine.js', 'ics-builder.js', 'email-handler.js', 'email-parser.js', 'storage.js']) {
+    ok(rd(`../src/domains/card/${f}`).equals(rd(`./golden/src/${f}`)), `verbatim 破坏: src/domains/card/${f} 与 golden 不再逐字节一致`);
+  }
+}
 
 console.log('C. 其它:混册/颜色/testDate');
 t = await (await call(hubWorker, '?cal=all&debug=0')).text();
@@ -126,7 +154,7 @@ ok(t.includes('X-APPLE-CALENDAR-COLOR:#00AA00'), 'colorCard 覆盖');
 j = JSON.parse(await (await call(hubWorker, '?cal=all&format=json&testDate=2027-01-01')).text());
 ok(j.alarms.every(a => a.date >= '2027-01-01'), 'testDate 未来过滤生效');
 
-console.log('D. v4:领地/排除/标签/单卡豁免');
+console.log('D. 领地/排除/标签/单卡豁免');
 // D1 领地:src/domains/card/config.js 必须是纯垫片(不含任何配置值)
 const shim = (await import('fs')).readFileSync(new URL('../src/domains/card/config.js', import.meta.url), 'utf-8');
 ok(shim.includes("export * from '../../../config/card.js'") && !shim.includes('ACCOUNTS ='), '垫片只转发,配置全在用户领地 config/');
@@ -148,21 +176,14 @@ let tD2 = await (await call(hubWorker, '?cal=card&debug=0&mode=exact&merge=0')).
 ok(tD2.includes('CMB'), 'remind:false 不影响日历(CMB 事件仍在)');
 delete cmb.remind;
 
-console.log('E. CN 双口径(official / market)');
+console.log('E. CN 双口径(bank / market) —— v5 词汇,真实归档数据');
 {
-  const { createHolidayHub } = await import('../src/holidays/index.js');
-  // 构造:2026-10-01(周四)法定放假;2026-10-10(周六)调休补班
-  globalThis.__cnDays = [
-    { date: '2026-10-01', isOffDay: true },
-    { date: '2026-10-10', isOffDay: false }
-  ];
-  const D = (str) => { const [a, b, c] = str.split('-').map(Number); return new Date(a, b - 1, c, 12, 0, 0); };
-
+  // 2026-10-01 = 国庆法定假(真实公告);2026-10-10 = 调休补班周六(真实公告);2026-10-13 = 普通周二
   let hb = await createHolidayHub(['CN'], [2026]);
   let w = hb.makeWorkdayChecker(['CN']);
-  ok(w(D('2026-10-10')) === true,  'official: 补班周六 = 上班(原行为分毫未动)');
-  ok(w(D('2026-10-01')) === false, 'official: 法定假 = 休息');
-  ok(w(D('2026-10-13')) === true,  'official: 普通周二 = 上班');
+  ok(w(D('2026-10-10')) === true,  'bank(默认): 补班周六 = 上班(原 official 行为分毫未动)');
+  ok(w(D('2026-10-01')) === false, 'bank: 法定假 = 休息');
+  ok(w(D('2026-10-13')) === true,  'bank: 普通周二 = 上班');
 
   w = hb.makeWorkdayChecker(['CN:market']);
   ok(w(D('2026-10-10')) === false, 'market: 补班周六 = 休息(股市/清算口径)');
@@ -171,23 +192,22 @@ console.log('E. CN 双口径(official / market)');
 
   hb = await createHolidayHub(['CN'], [2026], { cnDefaultRule: 'market' });
   ok(hb.makeWorkdayChecker(['CN'])(D('2026-10-10')) === false, '全局默认 market(?cnRule=)生效');
-  ok(hb.makeWorkdayChecker(['CN:official'])(D('2026-10-10')) === true, '条目 token 优先于全局默认');
+  ok(hb.makeWorkdayChecker(['CN:bank'])(D('2026-10-10')) === true, "条目 token('CN:bank')优先于全局默认");
 
   hb = await createHolidayHub(['CN:market', 'CN', 'US'], [2026]);
-  ok(hb.makeWorkdayChecker(['CN:market', 'US'])(D('2026-10-11')) === false, '周日+多国叠加 = 休息;token 归一化不重复建 provider');
-  globalThis.__cnDays = null;
+  ok(hb.makeWorkdayChecker(['CN:market', 'US'])(D('2026-10-11')) === false, '周日+多国叠加 = 休息;token 归一化不重复建数据集');
 
-  // 管道 + 诊断标注
+  // 管道 + 诊断标注 + 响亮降级
   const tE = await (await call(hubWorker, '?cal=card&cnRule=market')).text();
   ok(tE.includes('CN工作日口径: market'), '诊断报告标注市场口径');
   const tE2 = await (await call(hubWorker, '?cal=card')).text();
-  ok(tE2.includes('CN工作日口径: official'), '诊断报告标注默认口径');
+  ok(tE2.includes('CN工作日口径: bank'), '诊断报告标注默认口径(bank)');
+  const tE3 = await (await call(hubWorker, '?cal=card&cnRule=official')).text();
+  ok(tE3.includes('已按 bank 处理') && tE3.includes('official 已废除'), "?cnRule=official(v5 已废) → 诊断响亮告警,不静默");
 }
 
 console.log('F. US 双日历(银行/federal vs 市场/NYSE)');
 {
-  const { createHolidayHub } = await import('../src/holidays/index.js');
-  const D = (str) => { const [a, b, c] = str.split('-').map(Number); return new Date(a, b - 1, c, 12, 0, 0); };
   const hb = await createHolidayHub(['US', 'US:market'], [2026, 2027, 2028]);
   const bank = hb.makeWorkdayChecker(['US']);
   const mkt = hb.makeWorkdayChecker(['US:market']);
@@ -199,38 +219,34 @@ console.log('F. US 双日历(银行/federal vs 市场/NYSE)');
   ok(bank(D('2027-12-31')) === false && mkt(D('2027-12-31')) === true,  '元旦落周六: 银行observed休 / NYSE开(唯一例外规则)');
   ok(mkt(D('2026-11-26')) === false && mkt(D('2026-11-27')) === true,   '感恩节休; 次日半日市=开市');
   ok(mkt(D('2026-01-19')) === false && bank(D('2026-01-19')) === false, 'MLK 两边同休(交集节日)');
-  ok(hb.makeWorkdayChecker(['US:official'])(D('2026-10-12')) === false, "'US:official' ≡ 'US'(银行口径)");
+  ok(hb.makeWorkdayChecker(['US:bank'])(D('2026-10-12')) === false, "'US:bank' ≡ 'US'(显式写法等价)");
   ok(hb.makeWorkdayChecker(['CN', 'US:market'])(D('2026-04-03')) === false, '与 CN 叠加: 任一休即休');
 }
 
-console.log('G. HK 口径别名(HK:market ≡ HK)');
+console.log('G. HK 口径(v5: public 是唯一合法 kind;旧别名响亮降级)');
 {
-  const { createHolidayHub } = await import('../src/holidays/index.js');
-  const D = (str) => { const [a, b, c] = str.split('-').map(Number); return new Date(a, b - 1, c, 12, 0, 0); };
-  const hb = await createHolidayHub(['HK', 'HK:market', 'HK:official'], [2026]);
+  const hb = await createHolidayHub(['HK', 'HK:public', 'HKG'], [2026]);
   const wHK = hb.makeWorkdayChecker(['HK']);
-  const wM  = hb.makeWorkdayChecker(['HK:market']);
-  const wO  = hb.makeWorkdayChecker(['HK:official']);
-  // 连续两周逐日等价(含周末),三种写法输出必须完全一致
+  const wP  = hb.makeWorkdayChecker(['HK:public']);
+  const w3  = hb.makeWorkdayChecker(['HKG']);
+  // 连续两周逐日等价(含周末),三种规范写法输出必须完全一致
   let allEq = true;
   for (let i = 0; i < 14; i++) {
     const d = D('2026-07-06'); d.setDate(d.getDate() + i);
-    if (wHK(d) !== wM(d) || wHK(d) !== wO(d)) { allEq = false; break; }
+    if (wHK(d) !== wP(d) || wHK(d) !== w3(d)) { allEq = false; break; }
   }
-  ok(allEq, "'HK:market'/'HK:official' 与 'HK' 逐日等价(别名契约)");
-  ok(wM(D('2026-07-12')) === false && wM(D('2026-07-13')) === true, '别名下周日休/周一班,行为正常');
-  ok(hb.makeWorkdayChecker(['CN', 'HK:market'])(D('2026-07-12')) === false, '别名可与他国叠加');
+  ok(allEq, "'HK' / 'HK:public' / 'HKG'(alpha-3) 逐日等价");
+  ok(wHK(D('2026-07-12')) === false && wHK(D('2026-07-13')) === true, '周日休/周一班,行为正常');
+  ok(hb.makeWorkdayChecker(['CN', 'HK'])(D('2026-07-12')) === false, '可与他国叠加');
+  // v4.3 的 'HK:market'/'HK:official' 别名已随 v5 废除:行为退默认口径(仍正确)但必须告警可见
+  const hb2 = await createHolidayHub(['HK:market'], [2026]);
+  ok(hb2.makeWorkdayChecker(['HK:market'])(D('2026-07-13')) === true, '旧别名不致崩:退 HK 默认口径');
+  ok(hb2.loadLogs.some(l => /market/.test(l) && /WARN|⚠|告警|未识别|unknown/i.test(l)), '旧别名在 loadLogs 响亮告警(不静默)');
 }
 
 console.log('H. 三叠口径配方(CN+US+US:market) —— 钉死场景');
 {
-  const { createHolidayHub } = await import('../src/holidays/index.js');
   const { computeReminder } = await import('../src/domains/card/repay-engine.js');
-  const D = (str) => { const [a, b, c] = str.split('-').map(Number); return new Date(a, b - 1, c, 12, 0, 0); };
-  globalThis.__cnDays = [
-    { date: '2026-10-01', isOffDay: true },    // CN 法定假(周四)
-    { date: '2026-10-10', isOffDay: false }    // CN 调休补班(周六)
-  ];
   const hb = await createHolidayHub(['CN', 'US', 'US:market'], [2026]);
   const w = hb.makeWorkdayChecker(['CN', 'US', 'US:market']);
 
@@ -238,7 +254,7 @@ console.log('H. 三叠口径配方(CN+US+US:market) —— 钉死场景');
   ok(w(D('2026-10-12')) === false, 'Columbus: 银行腿休(NYSE 开也没用) → 全链休');
   ok(w(D('2026-11-11')) === false, 'Veterans: 银行腿休 → 全链休');
   ok(w(D('2026-10-01')) === false, 'CN 法定假 → 全链休');
-  ok(w(D('2026-10-10')) === false, 'CN 补班周六: official 说上班,但 US 双腿周末 → 全链休(叠加天然兜住)');
+  ok(w(D('2026-10-10')) === false, 'CN 补班周六: bank 说上班,但 US 双腿周末 → 全链休(叠加天然兜住)');
   ok(w(D('2026-10-13')) === true,  '三腿皆开的普通周二 → 工作日');
 
   // verbatim 还款引擎在三叠日历上倒推(端到端)
@@ -249,7 +265,6 @@ console.log('H. 三叠口径配方(CN+US+US:market) —— 钉死场景');
   ok(item.startDateStr === '20261009', `名义10/13(周二)提前1工作日: 跨过Columbus+周末+补班六 → 10/9 (实得 ${item.startDateStr})`);
   item = computeReminder({ ...acct, repayDay: 12 }, 2026, 9, w, 1);
   ok(item.startDateStr === '20261008', `名义恰逢Columbus: 节假日补偿+1 → 10/8 (实得 ${item.startDateStr})`);
-  globalThis.__cnDays = null;
 }
 
 console.log('I. 插件契约(异步 prepare / 故障隔离 / 字段透传)');
@@ -264,17 +279,16 @@ console.log('I. 插件契约(异步 prepare / 故障隔离 / 字段透传)');
     },
     async build(state) {
       return {
-        eventLines: ['BEGIN:VEVENT', 'UID:zz-demo-202612@mycal.local', 'DTSTAMP:X',
-          'SUMMARY:🧪 zz插件事件', 'DTSTART;TZID=Asia/Shanghai:20261201T090000',
-          'DURATION:PT10M', 'END:VEVENT'],
-        alarms: [{ uid: 'zz-demo-202612', date: '2026-12-01', time: '09:00', reason: 'zz', tz: 'Asia/Tokyo' }],
-        debugLines: [`【zz】env注入:${state.gotEnv ? '✓' : '✗'}`]
+        eventLines: ['BEGIN:VEVENT', 'UID:zz-demo-20260801@mycal.local', 'DTSTAMP:20260701T000000Z',
+          'SUMMARY:🧪 zz插件事件', 'DTSTART;VALUE=DATE:20260801', 'DTEND;VALUE=DATE:20260802', 'END:VEVENT'],
+        alarms: [{ uid: 'zz-demo-202608', date: '2026-08-01', time: '09:00', reason: '🧪', tz: 'Asia/Tokyo' }],
+        debugLines: ['【🧪 zz域】', `env注入:${state.gotEnv ? '✓' : '✗'}`]
       };
     }
   };
-  // 模拟插件 bad:build 抛异常
+  // 模拟插件 bad:build 必炸 → 只熔断自己
   DOMAINS.bad = {
-    id: 'bad', calName: 'B', defaultColor: '#111111',
+    id: 'bad', calName: 'B测试', defaultColor: '#000000',
     prepare() { return { countries: [], years: [], state: {} }; },
     build() { throw new Error('boom'); }
   };
