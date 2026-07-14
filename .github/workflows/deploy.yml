@@ -45,7 +45,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GH_PAT }}
 
-      - name: 运行测试(83 项;金标准/契约/口径/响亮降级)
+      - name: 运行测试(81 项;结构自洽/契约/口径避让/响亮降级)
         run: node test/hub.test.mjs
 
       - name: 发布 Worker 到 Cloudflare
