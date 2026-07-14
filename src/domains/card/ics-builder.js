@@ -133,23 +133,23 @@ function buildTimingLines(cfg, mode) {
   if (mode === 'exact') {
     const timeStr = `${pad2(cfg.targetChinaHour)}${pad2(cfg.targetChinaMinute)}00`;
     lines.push(`DURATION:PT${cfg.exactDurationMin}M`);
-    return { prefixLines: [`DTSTART;TZID=Asia/Shanghai:{START}T${timeStr}`], durationLines: lines, alarms: cfg.exAlarms, kind: 'exact' };
+    return { prefixLines: [`DTSTART;TZID=Asia/Shanghai:{START}T${timeStr}`], durationLines: lines, reminders: cfg.exactReminders, kind: 'exact' };
   }
-  return { prefixLines: [`DTSTART;VALUE=DATE:{START}`, `DTEND;VALUE=DATE:{END}`], durationLines: [], alarms: cfg.adAlarms, kind: 'allday' };
+  return { prefixLines: [`DTSTART;VALUE=DATE:{START}`, `DTEND;VALUE=DATE:{END}`], durationLines: [], reminders: cfg.allDayReminders, kind: 'allday' };
 }
 
 function pushTiming(ics, startStr, endStr, cfg, mode) {
   if (mode === 'exact') {
     const timeStr = `${pad2(cfg.targetChinaHour)}${pad2(cfg.targetChinaMinute)}00`;
     ics.push(`DTSTART;TZID=Asia/Shanghai:${startStr}T${timeStr}`, `DURATION:PT${cfg.exactDurationMin}M`);
-    for (const al of cfg.exAlarms) {
+    for (const al of cfg.exactReminders) {
       const trig = beforeStartTrigger(al.minutesBefore);
       const label = al.minutesBefore === 0 ? '事件开始时提醒！' : `提前${al.minutesBefore}分钟提醒！`;
       ics.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${label}`, `TRIGGER:${trig}`, 'END:VALARM');
     }
   } else {
     ics.push(`DTSTART;VALUE=DATE:${startStr}`, `DTEND;VALUE=DATE:${endStr}`);
-    for (const al of cfg.adAlarms) {
+    for (const al of cfg.allDayReminders) {
       const total = al.dayOffset * 1440 + al.hour * 60 + al.minute;
       const trig = signedDurationTrigger(total);
       const label = `${al.dayOffset === 0 ? '当天' : `第${al.dayOffset}天`} ${pad2(al.hour)}:${pad2(al.minute)} 提醒！`;

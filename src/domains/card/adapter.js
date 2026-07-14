@@ -10,7 +10,8 @@
 //
 // 信用卡 URL 参数【全部本域解析】(与原项目一致)：
 //   ?mode=exact|allday  ?merge=1|0  ?past=3  ?future=12  ?durationMin=360
-//   ?adAlarms=-1:20:00,0:09:30   ?exAlarms=1,60   ?mergeTitleShowCount=2
+//   ?allDayReminders=-1:20:00,0:09:30   ?exactReminders=1,60   ?mergeTitleShowCount=2
+//   (?adAlarms= / ?exAlarms= 为 v5.2 前旧名,仍兼容)
 //   ?ch=9 ?cm=30 (响铃时刻)      ?cardAlarm=merged|each|off (仅影响 JSON)
 // 中枢级视图过滤(?tags= ?excludeTags=)经 filters 传入，对账户的 tags 字段生效。
 
@@ -21,8 +22,8 @@ import { getLatestStatement, listRecentFailures } from './storage.js';
 
 const pad2 = (n) => ('0' + n).slice(-2);
 
-// ---- 参数解析辅助(原 worker-entry 原样) ----
-function parseAdAlarms(str, fallback) {
+// ---- 参数解析辅助 ----
+function parseAllDayReminders(str, fallback) {
   try {
     const e = str.split(',').map(seg => {
       const [d, hh, mm] = seg.split(':');
@@ -33,7 +34,7 @@ function parseAdAlarms(str, fallback) {
     return e.length ? e : fallback;
   } catch { return fallback; }
 }
-function parseExAlarms(str, fallback) {
+function parseExactReminders(str, fallback) {
   try {
     const e = str.split(',').map(s => {
       const n = parseInt(s.trim());
@@ -69,8 +70,12 @@ export const cardDomain = {
     const mergeSameDay = q.has('merge') ? ['1', 'true', 'yes'].includes(q.get('merge').toLowerCase()) : cfg.mergeSameDay;
     if (q.has('mergeTitleShowCount')) cfg.mergeTitleShowCount = parseInt(q.get('mergeTitleShowCount'));
     if (q.has('durationMin')) cfg.exactDurationMin = parseInt(q.get('durationMin'));
-    if (q.has('adAlarms')) cfg.adAlarms = parseAdAlarms(q.get('adAlarms'), cfg.adAlarms);
-    if (q.has('exAlarms')) cfg.exAlarms = parseExAlarms(q.get('exAlarms'), cfg.exAlarms);
+    // 日历提醒(VALARM):新参数名 ?allDayReminders= / ?exactReminders=;
+    // 兼容旧名 ?adAlarms= / ?exAlarms=(v5.2 前的名字,保留别名防止旧链接失效)。
+    const adReminderRaw = q.get('allDayReminders') ?? q.get('adAlarms');
+    if (adReminderRaw != null) cfg.allDayReminders = parseAllDayReminders(adReminderRaw, cfg.allDayReminders);
+    const exReminderRaw = q.get('exactReminders') ?? q.get('exAlarms');
+    if (exReminderRaw != null) cfg.exactReminders = parseExactReminders(exReminderRaw, cfg.exactReminders);
     if (q.has('ch')) cfg.targetChinaHour = parseInt(q.get('ch'));
     if (q.has('cm')) cfg.targetChinaMinute = parseInt(q.get('cm'));
 

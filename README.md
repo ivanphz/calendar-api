@@ -23,8 +23,11 @@ alarm-api 对仗;Cloudflare Worker 部署名保持现役 ios-calendar-ics 不变
 ```
 config/   你的领地:账户、任务、默认值、标签。框架更新永不触碰。
 src/      框架领地:更新时整目录替换,不含任何配置。
-test/golden/  金标准测试基建:原项目终版冻结,永不改动(存档在已归档原仓库)。
 ```
+
+> 信用卡逻辑虽源自独立项目 repayment-cal(已归档),但自并入起就是**可自由演进的框架
+> 一等公民** —— 想改直接改 `src/domains/card/`,详见 docs/PLUGIN-CARD.md §0(v5.2 起已
+> 移除"原版冻结"约束)。
 
 日常维护 = 只改 `config/`:
 加信用卡 → `config/card.js` 的 ACCOUNTS;加签到 → `config/checkin.js` 的 TASK_DICT。
@@ -49,7 +52,7 @@ test/golden/  金标准测试基建:原项目终版冻结,永不改动(存档在
 
 ```bash
 npm ci                    # 需 GitHub Packages 私有源(上游 @ivanphz/workdays-core)
-node test/hub.test.mjs    # 83 项:金标准(与冻结原版逐行等价) + 领地/视图/闹钟策略 + 口径 + 响亮降级
+node test/hub.test.mjs    # 81 项:信用卡结构自洽 + 领地/视图/闹钟策略 + 口径避让 + 响亮降级
 ```
 
 部署走 GitHub Actions:push main → npm ci → **83 项测试(红灯不部署)** → wrangler deploy。

@@ -25,7 +25,7 @@
 3. **github.dev 单提交换血**(仓库页按 `.` 键进编辑器,一次提交完成全部,清单见 §3):
    删 `src/holidays/` 五文件 + 覆盖 9 个文件 + 新增 15 个文件。
    push 后**新 deploy.yml 自动触发**:npm ci(锁文件已在,交付版 package.json 的 `"*"`
-   依赖范围与之兼容,已实测)→ **83 项测试** → **原地更新**线上 Worker `ios-calendar-ics`
+   依赖范围与之兼容,已实测)→ **81 项测试** → **原地更新**线上 Worker `ios-calendar-ics`
    (同名部署,订阅 URL / KV / Secret / Email Routing 全部不动)。
 4. **再跑一次 Update workdays-core**(收口,可选但建议):把 `"*"` 钉成精确版本号、
    锁文件根信息同步,再触发一次绿部署。此后一切交给自动升级链。
@@ -44,7 +44,7 @@
 |---|---|
 | 删除(5) | `src/holidays/index.js` `cn.js` `hk.js` `us.js` `us-market.js` |
 | 覆盖(9) | `README.md` · `ARCHITECTURE.md` · `docs/DEVGUIDE.md` · `docs/DEVLOG.md` · `src/worker-entry.js` · `test/hub.test.mjs` · `wrangler.toml` · `package.json` · `.github/workflows/deploy.yml` |
-| 新增(15) | `.github/workflows/update-core.yml`(§2 第 1 步已传) · `docs/PLUGIN-CARD.md` · `docs/DOWNSTREAM.md` · `docs/UPGRADE-V5.md` · `test/golden/README.md` · `test/golden/src/` 11 个文件(worker-entry / config[垫片] / repay-engine / ics-builder / email-handler / email-parser / storage / holidays 四件) |
+| 新增(4) | `.github/workflows/update-core.yml`(§2 第 1 步已传) · `docs/PLUGIN-CARD.md` · `docs/DOWNSTREAM.md` · `docs/UPGRADE-V5.md` |
 
 其余(`config/` 三件、`src/domains/` 全部、`src/registry.js`、`.gitignore`)不动。
 
@@ -75,7 +75,7 @@ wrangler `name` 保持 **ios-calendar-ics** —— 与线上现役 Worker 同名
 | npm ci 红:`ENOLOCK`/缺 lockfile | §2 第 2 步没跑就推了第 3 步 | Actions → Update workdays-core → Run,自动补齐并触发绿部署 |
 | npm ci 红:lock 与 package.json 不同步 | 手工改过依赖段 | 同上,重跑 update-core 即自愈 |
 | npm 404 `@ivanphz/workdays-core` | GH_PAT 缺/无 `read:packages`/scope 大小写 | 对照 §1 与上游 INTEGRATION §8 |
-| 测试红 | 真问题,别硬部署(fail-closed 就是为此) | 看失败行;金标准差异会打印首个差异行 |
+| 测试红 | 真问题,别硬部署(fail-closed 就是为此) | 看失败行,断言消息会指出哪条不符 |
 | 上游发版后毫无反应 | 本仓库缺 GH_PAT / 上游 CONSUMER_REPOS 没加本仓库 | 上游 Release 日志看 dispatch 返回码;上游 INTEGRATION §7"新增消费者" |
 
 ## 7. 回滚

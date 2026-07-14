@@ -1,6 +1,18 @@
 // ============================================================================
-// 📁 config.js —— 日常维护唯一需要修改的文件 (加卡 / 改还款日 / 调闹钟 都在这)
+// 📁 config/card.js —— 信用卡日常维护唯一需要修改的文件【用户领地：框架更新永不触碰】
 // ============================================================================
+//   加卡 / 停卡 / 改还款日 / 改提醒时间，都在这个文件里，不用碰任何代码。
+//   本文件配的是【日历】。信用卡默认只出日历、不进闹钟网关(见文件底部 CARD_ALARM)。
+//
+// ── 【isActive：账户总开关，加卡/停卡看这里】 ────────────────────────────────
+//   isActive: true   → 这个账户正常生成日历事件(也参与闹钟,若网关开启)。
+//   isActive: false  → 这个账户【完全不出现】:不进日历、不进闹钟、不参与合并统计,
+//                      就像它不存在一样。但配置整段【保留】在文件里,想恢复改回 true 即可。
+//   ✅ 停用一张卡的正确做法 = 把 isActive 改成 false。
+//      不需要删除整段、也不需要用 /* */ 注释掉 —— 保留配置反而方便日后一键恢复,
+//      且留着能看到\"这张卡的历史参数\"。(本文件里\"卓越\"那条就是 isActive:false 的活例子。)
+//   ⚠️ 注释掉(//)与 isActive:false 效果相同(都不出现),但注释掉会让整段变灰、易看漏,
+//      且恢复时要逐行去注释。统一用 isActive 开关,别用注释停卡。
 //
 // 【核心概念：账单账户 account，不是"卡"】
 //   本系统追踪的单位是"一个独立账单"，不是一张物理卡。
@@ -48,8 +60,12 @@
 //            需要部署侧配置: KV 绑定 + Email Routing 转发规则 + EXPECTED_RECIPIENT Secret，见 README。
 //
 // 【假期叠加 holidayCalendars】
-//   数组，列出这张卡还款需要"同时在线"的国家。任一国放假，还款日就往前避让。
-//   CN 卡: ['CN']   HK 卡: ['CN','HK']   US 卡: ['CN','US']
+//   数组，列出这张卡还款需要"同时在线"的地区。任一地区放假，还款日就往前避让。
+//   口径 token 与上游 workdays-core 一词一义(功能上 CN≡CN:bank≡CHN:bank 等价):
+//     大陆·银行口径: ['CHN:bank']         补班周六算上班日;还款/清算都用这个
+//     香港:          ['CHN:bank','HK']    港澳卡通常叠加大陆(跨境清算受大陆假期影响)
+//     美国:          ['CHN:bank','US']    US=银行/联邦口径(还款用这个,别用 US:market)
+//   显式写 :bank 可钉死不被全局 ?cnRule=market 带偏。三位/二位码永久等价,本项目统一用三位。
 //
 // 【advanceDays】提前几个工作日提醒还款(在 holidayCalendars 定义的合并工作日历上倒推)。
 // ============================================================================
@@ -66,7 +82,7 @@ export const ACCOUNTS = [
     country: 'CN',
     countryLabel: '中国大陆',
     repayCurrency: 'CNY',            // [标题旁+正文]
-    holidayCalendars: ['CN'],
+    holidayCalendars: ['CHN:bank'],
     model: 'legacy',
     repayDay: 28,
     advanceDays: 2,
@@ -83,7 +99,7 @@ export const ACCOUNTS = [
     country: 'CN',
     countryLabel: '中国大陆',
     repayCurrency: 'CNY',
-    holidayCalendars: ['CN'],
+    holidayCalendars: ['CHN:bank'],
     model: 'legacy',
     repayDay: 25,
     advanceDays: 2,
@@ -100,7 +116,7 @@ export const ACCOUNTS = [
     country: 'CN',
     countryLabel: '中国大陆',
     repayCurrency: 'CNY',
-    holidayCalendars: ['CN'],
+    holidayCalendars: ['CHN:bank'],
     model: 'legacy',
     repayDay: 28,
     advanceDays: 2,
@@ -121,7 +137,7 @@ export const ACCOUNTS = [
     country: 'HK',
     countryLabel: '中国香港',
     repayCurrency: 'HKD',            // 港币账单
-    holidayCalendars: ['CN', 'HK'],
+    holidayCalendars: ['CHN:bank', 'HK'],
     model: 'legacy',
     repayDay: 29,
     advanceDays: 3,
@@ -138,7 +154,7 @@ export const ACCOUNTS = [
     country: 'HK',
     countryLabel: '中国香港',
     repayCurrency: 'CNY',            // 人民币账单(同卡的第二个账单)
-    holidayCalendars: ['CN', 'HK'],
+    holidayCalendars: ['CHN:bank', 'HK'],
     model: 'legacy',
     repayDay: 29,
     advanceDays: 3,
@@ -155,7 +171,7 @@ export const ACCOUNTS = [
     country: 'HK',
     countryLabel: '中国香港',
     repayCurrency: 'HKD',
-    holidayCalendars: ['CN', 'HK'],
+    holidayCalendars: ['CHN:bank', 'HK'],
     model: 'legacy',
     repayDay: 29,
     advanceDays: 3,
@@ -163,7 +179,7 @@ export const ACCOUNTS = [
     fxNote: ''
   },
   {
-    isActive: false,
+    isActive: false,                 // ← 停用示例:改 false 即完全不出现,配置保留方便日后恢复(见文件顶部 isActive 说明)
     bankShortName: 'HSBC-HK',
     bankFullName: '汇丰香港',
     cardName: '卓越',
@@ -172,7 +188,7 @@ export const ACCOUNTS = [
     country: 'HK',
     countryLabel: '中国香港',
     repayCurrency: 'HKD',
-    holidayCalendars: ['CN', 'HK'],
+    holidayCalendars: ['CHN:bank', 'HK'],
     model: 'legacy',
     repayDay: 29,
     advanceDays: 3,
@@ -192,7 +208,7 @@ export const ACCOUNTS = [
   //   country: 'US',
   //   countryLabel: '美国',
   //   repayCurrency: 'USD',
-  //   holidayCalendars: ['CN', 'US'],
+  //   holidayCalendars: ['CHN:bank', 'US'],
   //   model: 'cycle',
   //   statementDay: 5,      // 账单日
   //   graceDays: 21,        // 还款期限天数 -> 最终还款日 = 账单日 + 21 天
@@ -215,7 +231,7 @@ export const ACCOUNTS = [
   //   country: 'HK',
   //   countryLabel: '中国香港',
   //   repayCurrency: 'HKD',
-  //   holidayCalendars: ['CN', 'HK'],
+  //   holidayCalendars: ['CHN:bank', 'HK'],
   //   model: 'email',
   //   emailDateOffsetDays: 2,   // 收件日减2天推定账单日(以后积累数据可调，见 email-parser.js 的口子)
   //   emailGraceDays: 21,       // 账单日+21天为还款日(以后按实测调，Pulse实测约24、Red约26)
@@ -243,13 +259,21 @@ export const DEFAULT_CONFIG = {
   targetChinaMinute: 30,
   exactDurationMin: 360,
 
-  // 闹钟(两个数组都支持任意数量)
-  adAlarms: [               // allday 模式：相对提醒日午夜的偏移
-    { dayOffset: -1, hour: 20, minute: 0 },
-    { dayOffset: 0, hour: 9, minute: 30 }
+  // ────────────────────────────────────────────────────────────────────────
+  // 【日历提醒 = 日历事件自带的通知(ICS 的 VALARM)】
+  //   这【不是闹钟】。iOS 订阅日历后由系统在这些时间点弹日历通知,订阅即生效、默认就在用。
+  //   与文件最底部的「闹钟网关 CARD_ALARM」是两套【完全独立】的东西,别混淆:
+  //     · 下面两个数组 → 写进 .ics 的 VALARM,属于[日历],这才是你现在用的提醒。
+  //     · CARD_ALARM   → 只影响 ?format=json(喂手机闹钟网关),属于[闹钟],默认 off、你暂时不用。
+  //   命名刻意不含 "alarm" 二字,就是为了从字面上杜绝"日历提醒被当成闹钟"的误读。
+  //   两个数组按 displayMode 二选一生效:exact 用 exactReminders,allday 用 allDayReminders。
+  // ────────────────────────────────────────────────────────────────────────
+  allDayReminders: [        // 【仅 allday 模式】相对提醒日午夜的偏移(每个元素 = 一条日历通知)
+    { dayOffset: -1, hour: 20, minute: 0 },  // 前一天 20:00
+    { dayOffset: 0, hour: 9, minute: 30 }    // 当天 09:30
   ],
-  exAlarms: [               // exact 模式：提前分钟数
-    { minutesBefore: 1 }
+  exactReminders: [         // 【仅 exact 模式,你的默认】提前分钟数(每个元素 = 一条日历通知)
+    { minutesBefore: 0 }    // 0 = 事件准点(09:30)提醒,不提前。想提前自己加,如 { minutesBefore: 30 }
   ],
 
   holidayExtraAdvance: 1,   // 名义还款日恰逢休息日时，额外多提前几个工作日。范围 0 或 1
@@ -272,11 +296,13 @@ export const CURRENCY_SYMBOLS = {
 // 日历是本体，闹钟是附加输出 —— 本段与上面的日历配置互不干涉。
 //
 // alarmMode 三档 (URL ?cardAlarm=merged|each|off 可临时覆盖)：
-//   'merged' (默认) 同一天所有还款 = 一条闹钟。不管日历合不合并，同一时刻绝不响多条。
+//   'off'    (默认) 信用卡【完全不进闹钟网关】,只出日历。← 你当前的选择:日历提醒已够用。
+//   'merged'        同一天所有还款 = 一条闹钟。不管日历合不合并,同一时刻绝不响多条。
 //   'each'          每笔账单一条闹钟(可单独勾销)。
-//   'off'           信用卡完全不进闹钟网关(仅日历)。
+// 想临时试闹钟: 拉 JSON 时加 ?cardAlarm=merged 即可,无需改这里。
+// 想长期启用: 把下面 alarmMode 改成 'merged',并让手机网关订阅本项目的 ?format=json。
 // 响铃时刻 = 上面的 targetChinaHour/Minute (?ch= ?cm= 照常可调)。
-// 单卡豁免：想让某张卡不进闹钟，在它的账户条目里加 remind: false 即可(日历照常出)。
+// 单卡豁免：想让某张卡不进闹钟,在它的账户条目里加 remind: false 即可(日历照常出)。
 export const CARD_ALARM = {
-  alarmMode: 'merged'
+  alarmMode: 'off'
 };

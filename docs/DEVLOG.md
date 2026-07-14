@@ -4,7 +4,64 @@
 
 ---
 
-## v5.0 · 2026-07-14 —— 上游接入 + 破坏性词汇统一 + 金标准 v2 + 名称统一
+## v5.2 · 2026-07-14 —— 移除金标准冻结 + 日历提醒字段更名(两项破坏性变更)
+
+用户两点批评,均成立,一起处理:
+
+1. **移除 golden 金标准冻结,信用卡逻辑成为可自由演进的框架一等公民**。
+   反思:v3~v5 把原项目 src 逐字节冻结在 `test/golden/`,并用 B5 字节看守 + A 组逐行对比
+   焊死"信用卡逻辑 = 原版"。这是**定位倒置** —— 迁移正确性是一次性证据,不该变成"用户不能
+   再改自己信用卡逻辑"的枷锁。用户原话:"以后我要动信用卡逻辑还不能改了吗?不可能啊。"
+   处置:删除整个 `test/golden/`;A 组从"与原版逐行等价"重写为**结构自洽断言**(该出的账户出、
+   该合并的合并、DTSTART/VALARM 符合配置);B5 从"字节看守"降为**账户开关行为断言**(停卡真停);
+   H 组去掉 "verbatim 引擎" 措辞。正确性自此由 A(结构)+ E~H(口径避让/端到端,真实归档钉死)+
+   I(契约)守护,校验"逻辑对不对"而非"和原版一不一样"。改信用卡逻辑 = 直接改 src/domains/card/
+   + 更新对应断言,无枷锁。金标准相关文档(ARCHITECTURE §7、PLUGIN-CARD §0/§10、README 领地段、
+   UPGRADE 清单)全面重写为"演进指南"。
+
+2. **日历提醒字段更名,彻底摆脱 "alarm" 误导**(破坏性,带兼容别名)。
+   反思:`adAlarms`/`exAlarms` 明明是[日历事件的 VALARM 通知],却用了 "alarm" 一词,与底部
+   [闹钟网关 CARD_ALARM]共享词根 —— 正是这个命名让 v5.1 我写错注释、用户误以为"日历提醒被换成
+   闹钟"。字段命名本身就是 bug。处置:`adAlarms → allDayReminders`、`exAlarms → exactReminders`
+   (刻意不含 alarm);同步改 config/card.js(字段+强化注释,明说"这不是闹钟")、
+   src/domains/card/ics-builder.js(消费点+死函数内键名)、adapter.js(解析函数改语义名)。
+   URL 参数新增 `?allDayReminders=`/`?exactReminders=`,**保留旧名 `?adAlarms=`/`?exAlarms=`
+   作兼容别名**(现有订阅链接不断)。得益于第 1 项刚移除 verbatim 束缚,此次改名无需同步任何
+   冻结副本 —— 两项变更天然互相成全:能改名,正因为逻辑已不再被焊死。
+
+**测试**:81/81(移除 A 组 6 参数组金标准对比 + B5 字节看守共 ~9 条,新增 A 组结构断言 ~7 条)。
+探针确认字段更名后 exact 默认 VALARM=`-PT0M`、allday 用带符号偏移、旧参数别名仍生效。
+
+---
+
+
+承接 v5.0,处理用户补充 checkin 原始文件后的四点澄清:
+
+1. **口径 token 统一迁 `CHN:bank`(三位显式)**:签到 MoeShare 的 `holidayCalendars` 从
+   "预留注释"升为真实字段 `['CHN:bank']`;信用卡 7 处活跃 + 3 处注释示例的 `['CN']`/
+   `['CN','HK']` 全部迁 `['CHN:bank',…]`。理由:①功能上 `CN≡CN:bank≡CHN:bank`,但显式
+   `:bank` 钉死不被全局 `?cnRule=market` 带偏(签到/还款要的就是"补班日照常");②三位码
+   统一美学(用户选)。上游实测完整识别 `CHN:bank` 且无告警(coverage 归一到 CN 数据集)。
+2. **信用卡默认纯日历、不进闹钟**:`CARD_ALARM.alarmMode` 由 `merged` 改 **`off`**;
+   `exAlarms` 由 `[{minutesBefore:1}]` 改 `[{minutesBefore:0}]`(准点 09:30 不提前)。
+   用户偏好:还款非高时效,日历提醒够用,要提前自定义。URL `?cardAlarm=merged` 随时临时开。
+3. **修正 v5.0 的一处注释误导(我的错)**:card.js 顶部曾写"加卡/改还款日/**调闹钟**都在这",
+   "调闹钟"一词让纯日历配置文件的 `adAlarms`/`exAlarms`(实为日历 VALARM)被误读为闹钟。
+   **数组值与逻辑从未改动**(A 组金标准全程绿即证),纯属注释措辞制造错觉。已重写顶部门楣,
+   把"日历提醒 VALARM"与"闹钟网关 CARD_ALARM"两套东西彻底划清,并补 `isActive` 停卡详解
+   (停卡=改 false,不必删段/注释;卓越卡作活教材)。
+4. **golden 第二处接缝(token 归一化)**:配置迁 `CHN:bank` 后,verbatim 冻结的 golden
+   `holidays/index.js`(只认二位码)会把该 token 落进"只按周末"降级分支 → A 组假红。
+   在 golden 的 `createHolidayHub` 入口 + `makeWorkdayChecker` 加纯词汇映射(去口径后缀 +
+   三位转二位),**不碰任何还款推算逻辑**。这与 config 垫片同级,属"为当测试基建而生的最小
+   接缝",不违反 golden 冻结铁律;登记于 golden/README。副产品:A 组逐行等价现在**反向
+   证明**了上游 `CHN:bank ≡ 原版二位 CN` 的语义等价。
+
+**测试**:84/84(B2 新增"默认 off 时 JSON 空"一条)。探针确认 exact 默认 VALARM=`-PT0M`
+(准点)、默认 JSON 空、签到 CHN:bank 无未识别告警。
+
+---
+
 
 **背景**:① 假期数据/判定与 alarm-api 各自维护两套,workdays-core 已就位(alarm-api 已接);
 ② 上游 v2 起词汇"一词一义"(official 等别名移除),与本库 v4.1/v4.3 契约冲突,用户裁决:

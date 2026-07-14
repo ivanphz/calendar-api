@@ -16,7 +16,10 @@
 //   remind: false         不进闹钟网关(日历照常出)。日历与闹钟解耦的任务级开关。
 //   alarmOffsets: [5, 0]  [闹钟] 提前分钟。缺省 = [0] 事件准点一条。
 //                         ⚠️ 与日历的 workdayAlarms/holidayAlarms 完全无关。
-//   holidayCalendars: ['CN']  该任务叠加哪些地区假期(默认 CN)。
+//   holidayCalendars: ['CHN:bank']  该任务叠加哪些地区假期(缺省 = ['CN'] = 大陆银行口径)。
+//                         口径 token 与上游 workdays-core 一词一义:CN≡CN:bank≡CHN:bank(等价),
+//                         补班周六算上班日。显式写 :bank 可钉死不被全局 ?cnRule=market 带偏。
+//                         多地区叠加(如 ['CHN:bank','HK'])任一地区休息即视为休息日。
 //   ext: { ... }          自由扩展对象，框架不读不校验；以后新特性优先往这里放，
 //                         老代码零影响(前向兼容约定)。
 
@@ -32,7 +35,10 @@ export const TASK_DICT = {
     defaultAnchor: "2026-06-01T16:29", // 缺省兜底起始锚点
     actionUrl: "https://moeshare.cc/jobcenter.php?action=list", // 签到直达链接(可选)
     workdayAlarms: [5, 0],      // [日历]工作日：提前5分钟、准点
-    holidayAlarms: [1, 0]       // [日历]非工作日：提前1分钟、准点
+    holidayAlarms: [1, 0],      // [日历]非工作日：提前1分钟、准点
+    holidayCalendars: ['CHN:bank']  // 假期口径:大陆·银行口径(补班周六算上班日)。
+                                    // 显式写 :bank 钉死 —— 即使整个链接加了 ?cnRule=market
+                                    // 也不会把签到带偏(签到要的就是"补班日照常打卡")。
     // tags: ['A'],
     // remind: false,
     // alarmOffsets: [5, 0],

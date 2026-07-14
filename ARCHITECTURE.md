@@ -33,18 +33,16 @@ calendar-api/
 │     │  ├─ adapter.js              解析 ?tasks ?months;闹钟策略(准点/脱钩)
 │     │  └─ engine.js               720h 漂移+碰撞检测(原逻辑逐行)
 │     └─ card/
-│        ├─ adapter.js              原 worker-entry 编排逐行搬 + VEVENT 抽取 + 闹钟策略
+│        ├─ adapter.js              URL 参数解析 + 编排 + VEVENT 抽取 + 闹钟策略
 │        ├─ config.js               ⚠️ 纯转发垫片 → ../../../config/card.js(不放任何值)
 │        └─ repay-engine.js / ics-builder.js / email-handler.js
-│           / email-parser.js / storage.js        ★ 原项目文件,逐字节 verbatim(B5 字节看守)
+│           / email-parser.js / storage.js        可自由演进的域逻辑(见 PLUGIN-CARD §0)
 │
 │  (v5 起【没有 src/holidays/】:假期事实全部来自上游 npm 包 @ivanphz/workdays-core,
 │   见 §6。要新地区 = 上游加数据集,本库零改动。)
 │
 ├─ test/
-│  ├─ hub.test.mjs                83 项:金标准等价 + 领地/视图/闹钟策略 + 口径 + 响亮降级
-│  └─ golden/                     🧊 金标准测试基建:原项目终版冻结(存档职责在已归档原仓库)
-│     └─ src/…                       仅 config.js 换成指向 config/card.js 的垫片,余逐字节原样
+│  └─ hub.test.mjs                81 项:信用卡结构自洽 + 领地/视图/闹钟策略 + 口径避让 + 响亮降级
 │
 ├─ docs/
 │  ├─ DEVGUIDE.md                 新插件接入手册(自足,三步)
@@ -64,8 +62,8 @@ calendar-api/
 2. `src/` 只属于框架。里面**不允许出现任何配置值**(card/config.js 垫片有测试看守)。
 3. 两地之间只有一条通道:`src/domains/card/config.js` 垫片 `export * from '../../../config/card.js'`,
    使原逻辑文件里的 `import './config.js'` 一字不改地继续工作。
-4. `test/golden/` 只属于测试基建。**永不改动**(唯一例外是那个 config 垫片,建档时已换好);
-   五个逻辑文件与 `src/domains/card/` 的字节级一致由测试 B5 看守。
+4. 信用卡域逻辑(`src/domains/card/`)是**可自由演进的框架代码**,没有"原版冻结"约束
+   (v5.2 起移除);改动方式与测试更新见 PLUGIN-CARD §0。
 
 ## 2. 数据流(一次请求)
 
@@ -196,16 +194,19 @@ DEVGUIDE"口径组合配方",测试 H 组钉死。
 `'HK'` / `'HK:public'`。v4.3 曾把 `'HK:market'/'HK:official'` 立为等价别名,**v5 已随上游
 词汇统一而废除**(写了不崩,退默认口径 + 响亮告警);决策沿革见 DEVLOG v5.0。
 
-## 7. 金标准(test/golden/)
+## 7. 信用卡域的演进(为什么没有金标准冻结)
 
 原信用卡项目 repayment-cal 已在 GitHub **归档(archived,只读)**,历史存档职责归那个仓库。
-其**终版 src/ 逐字节冻结**在本库 `test/golden/`,职责是**测试基建**(CI 每次都执行它),
-与存档无关 —— 归档仓库哪怕改名/消失,本库测试依旧密闭自足(v4 曾因引用外部路径全套测试
-失效,这是刻意根治):
+早期版本(v3~v5)曾在本库 `test/golden/` 冻结原版逐字节副本作金标准,以证明"从独立项目搬进
+框架时逻辑没搬歪"。**v5.2 起移除该机制**,原因很直接:迁移正确性是**一次性**的证据,而信用卡
+逻辑是框架里**长期要演进**的一等公民 —— 把它焊死在"原版不可改"上,等于宣布用户不能再改自己
+的信用卡逻辑,荒谬。移除后:
 
-1. **测试 oracle**:A 组把中枢 `?cal=card` 的 VEVENT 与 golden 输出逐行对比。为使对比是
-   **纯逻辑等价**,做了两个共享 —— 配置共享(golden 的 config.js 是指向 `config/card.js` 的
-   垫片,你日常改配置不会打破金标准)与事实共享(测试用上游导出把同一份 CN/HK 数据喂给
-   golden 的 fetch;US 两边独立计算,A 组顺带交叉验证上游 US 算法 ≡ 原版 us.js)。
-2. **字节看守**:B5 断言 `src/domains/card/` 五个逻辑文件与 golden 逐字节一致,防"顺手改
-   verbatim 文件"。若未来**有意**演进信用卡逻辑,正确姿势见 PLUGIN-CARD §"verbatim 铁律"。
+- 信用卡逻辑(`src/domains/card/`)与任何插件一样可自由改。改动方式见 PLUGIN-CARD §0。
+- 正确性改由**行为/结构断言**守护,而非"与原版逐行相等":
+  A 组(事件结构自洽:该出的账户出、该合并的合并、VALARM 符合配置)、
+  E~H 组(口径避让/双日历/三叠端到端,用真实归档日期钉死)、I 组(插件契约)。
+  这些断言校验的是"逻辑对不对",不是"和原版一不一样",所以你改逻辑时更新对应断言即可,
+  不会有"改了就假红"的枷锁。
+- 破坏性变更(改字段名/URL/输出结构)记 DEVLOG,并尽量给旧名留兼容别名
+  (如 v5.2 把 `adAlarms/exAlarms` 更名 `allDayReminders/exactReminders`,旧 URL 参数仍兼容)。
