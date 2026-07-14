@@ -10,6 +10,6 @@
     "test": "node test/hub.test.mjs"
   },
   "dependencies": {
-    "@ivanphz/workdays-core": "*"
+    "@ivanphz/workdays-core": "1.0.0"
   }
 }
