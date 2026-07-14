@@ -1,0 +1,42 @@
+# core 发版后自动升级依赖;也可在 Actions 页手动触发(Run workflow)兜底。
+# 与 alarm-api 的同名 workflow 逐字一致(来自 workdays-core INTEGRATION §4)。
+name: Update workdays-core
+
+on:
+  repository_dispatch:
+    types: [workdays-core-release]   # 与 core 仓库 release.yml 里的 event_type 逐字对应
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '指定版本(留空=latest;应急把本下游钉到旧版时手填,如 2.0.3)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}   # ⚠️ 必须用 PAT:GITHUB_TOKEN 的 push 不会触发 deploy.yml
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@ivanphz'
+
+      - name: 升级到指定/最新版并钉死精确版本
+        run: npm install @ivanphz/workdays-core@${{ github.event.inputs.version || 'latest' }} --save-exact
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PAT }}
+
+      - name: 提交(有变化才提交)
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git diff --cached --quiet || git commit -m "chore: bump workdays-core to ${{ github.event.client_payload.version || 'latest' }}"
+          git push

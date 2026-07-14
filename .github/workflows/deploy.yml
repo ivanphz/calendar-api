@@ -1,24 +1,52 @@
-name: Deploy Repayment Calendar Worker
+# ==============================================================================
+# GitHub Actions —— 测试 + 部署(测试红灯则不部署,fail-closed)
+#
+# 一次性 Secret(Settings → Secrets and variables → Actions):
+#   CF_API_TOKEN / CF_ACCOUNT_ID  —— Cloudflare 部署凭据(原有)
+#   GH_PAT                        —— 读取私有包 @ivanphz/workdays-core
+#                                    (与 alarm-api 共用同一个,见 workdays-core INTEGRATION §2)
+#
+# ⚠️ paths 里的 package.json / package-lock.json 两行不能删:
+#    workdays-core 自动升级(update-core.yml)的提交【只动这两个文件】,
+#    删了这两行 = 上游发版后本项目永远不会自动重新部署(上游手册点名的头号坑)。
+# ==============================================================================
+name: Deploy calendar-api Worker
 
-# 触发条件
 on:
-  # 1) 推送到 main 分支，且改动涉及源码或配置时自动部署
   push:
     branches:
       - main
     paths:
-      - 'src/**'           # 通配整个 src 目录：以后往 holidays/ 加新国家文件也无需改这里
+      - 'src/**'
+      - 'config/**'            # 用户领地(加卡/加任务/改默认)也必须触发部署
+      - 'test/**'              # 测试变更也走一遍流水线(部署幂等,代价可忽略)
       - 'wrangler.toml'
-  # 2) 手动触发按钮 (Actions 页面点 "Run workflow")
+      - 'package.json'         # ⚠️ core 自动升级只动这两个文件
+      - 'package-lock.json'    # ⚠️ 没有这两行,升级提交不会触发部署
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    name: Deploy to Cloudflare
+    name: Test & Deploy to Cloudflare
     steps:
       - name: Checkout 代码
         uses: actions/checkout@v4
+
+      - name: Setup Node(带 GitHub Packages 私有源)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@ivanphz'
+
+      - name: 安装依赖(workdays-core 从私有源拉取)
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PAT }}
+
+      - name: 运行测试(83 项;金标准/契约/口径/响亮降级)
+        run: node test/hub.test.mjs
 
       - name: 发布 Worker 到 Cloudflare
         uses: cloudflare/wrangler-action@v3
@@ -26,5 +54,4 @@ jobs:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           wranglerVersion: '4'
-          # 入口、名称、兼容性日期都已写在 wrangler.toml 里，这里直接 deploy 即可
           command: deploy
