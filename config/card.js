@@ -267,13 +267,20 @@ export const DEFAULT_CONFIG = {
   //     · CARD_ALARM   → 只影响 ?format=json(喂手机闹钟网关),属于[闹钟],默认 off、你暂时不用。
   //   命名刻意不含 "alarm" 二字,就是为了从字面上杜绝"日历提醒被当成闹钟"的误读。
   //   两个数组按 displayMode 二选一生效:exact 用 exactReminders,allday 用 allDayReminders。
+  //   ⚠️ 写法规则:【一个元素 = 一条提醒】,要几条就写几个 {}, 用逗号隔开。
+  //      ✅ 两条: [ { minutesBefore: 5 }, { minutesBefore: 1 } ]
+  //      ✅ 一条都不要: [ ]   ← 空数组。事件照常进日历,只是不弹通知,想要时再加回来
+  //      ❌ 语法错误(Worker 起不来): [ { minutesBefore: 5,1 } ]      ← 1 没有键名
+  //      ❌ 静默只剩1条(更难查): [ { minutesBefore: 5, minutesBefore: 1 } ]  ← 重复键,后者覆盖前者
+  //      ❌ 把整个字段删掉 → 本域熔断,日历只剩一条"❌ 域 card 构建失败"(不影响签到域)。
+  //         要留空请用 [ ],不要删字段。
   // ────────────────────────────────────────────────────────────────────────
   allDayReminders: [        // 【仅 allday 模式】相对提醒日午夜的偏移(每个元素 = 一条日历通知)
     { dayOffset: -1, hour: 20, minute: 0 },  // 前一天 20:00
     { dayOffset: 0, hour: 9, minute: 30 }    // 当天 09:30
   ],
   exactReminders: [         // 【仅 exact 模式,你的默认】提前分钟数(每个元素 = 一条日历通知)
-    { minutesBefore: 5,1 }    // 0 = 事件准点(09:30)提醒,不提前。想提前自己加,如 { minutesBefore: 30 }
+    { minutesBefore: 1 }    // 0 = 事件准点(09:30)提醒,不提前。想提前自己加,如 { minutesBefore: 30 }
   ],
 
   holidayExtraAdvance: 1,   // 名义还款日恰逢休息日时，额外多提前几个工作日。范围 0 或 1
