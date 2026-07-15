@@ -273,7 +273,7 @@ export const DEFAULT_CONFIG = {
     { dayOffset: 0, hour: 9, minute: 30 }    // 当天 09:30
   ],
   exactReminders: [         // 【仅 exact 模式,你的默认】提前分钟数(每个元素 = 一条日历通知)
-    { minutesBefore: 0 }    // 0 = 事件准点(09:30)提醒,不提前。想提前自己加,如 { minutesBefore: 30 }
+    { minutesBefore: 5,1 }    // 0 = 事件准点(09:30)提醒,不提前。想提前自己加,如 { minutesBefore: 30 }
   ],
 
   holidayExtraAdvance: 1,   // 名义还款日恰逢休息日时，额外多提前几个工作日。范围 0 或 1
