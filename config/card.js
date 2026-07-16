@@ -43,10 +43,6 @@
 //   - Pulse 港币账单: 'HKD'; Pulse 人民币账单: 'CNY' (拆成两个 account)
 //   currencySymbol 会根据代码自动映射(见文件底部 CURRENCY_SYMBOLS)，标题旁显示符号更直观。
 //
-// 【购汇卡接口(暂未启用)】
-//   若将来有"需要先购汇、还入外币、币种不定"的卡，用 needsFxPurchase / fxNote 两个字段。
-//   目前不写任何逻辑，只是把接口预留好，遇到时再启用。
-//
 // 【账单日模型 model: 'legacy' / 'cycle' / 'email'】
 //   'legacy' (旧模型，简单)：repayDay = 每月固定还款日(数字)。适合中国大陆固定还款日的卡。
 //            月末边界规则：若该日在当月不存在(如2月没有29号)，顺延到下月对应溢出日(29号->3月1日)，
@@ -86,8 +82,6 @@ export const ACCOUNTS = [
     model: 'legacy',
     repayDay: 28,
     advanceDays: 2,
-    needsFxPurchase: false,          // 预留接口，暂不启用
-    fxNote: ''
   },
   {
     isActive: true,
@@ -103,8 +97,6 @@ export const ACCOUNTS = [
     model: 'legacy',
     repayDay: 25,
     advanceDays: 2,
-    needsFxPurchase: false,
-    fxNote: ''
   },
   {
     isActive: true,
@@ -120,8 +112,6 @@ export const ACCOUNTS = [
     model: 'legacy',
     repayDay: 28,
     advanceDays: 2,
-    needsFxPurchase: false,
-    fxNote: ''
   },
 
   // ---------- 🇭🇰 香港账户 (旧模型过渡；规律清楚后可逐条切到 model:'cycle') ----------
@@ -141,8 +131,6 @@ export const ACCOUNTS = [
     model: 'legacy',
     repayDay: 29,
     advanceDays: 3,
-    needsFxPurchase: false,
-    fxNote: ''
   },
   {
     isActive: true,
@@ -158,8 +146,6 @@ export const ACCOUNTS = [
     model: 'legacy',
     repayDay: 29,
     advanceDays: 3,
-    needsFxPurchase: false,
-    fxNote: ''
   },
   {
     isActive: true,
@@ -175,8 +161,6 @@ export const ACCOUNTS = [
     model: 'legacy',
     repayDay: 29,
     advanceDays: 3,
-    needsFxPurchase: false,
-    fxNote: ''
   },
   {
     isActive: false,                 // ← 停用示例:改 false 即完全不出现,配置保留方便日后恢复(见文件顶部 isActive 说明)
@@ -192,8 +176,6 @@ export const ACCOUNTS = [
     model: 'legacy',
     repayDay: 29,
     advanceDays: 3,
-    needsFxPurchase: false,
-    fxNote: ''
   }
 
   // ---------- 🇺🇸 美国账户示例 (以后办卡后取消注释并填真实数据) ----------
@@ -213,8 +195,6 @@ export const ACCOUNTS = [
   //   statementDay: 5,      // 账单日
   //   graceDays: 21,        // 还款期限天数 -> 最终还款日 = 账单日 + 21 天
   //   advanceDays: 3,
-  //   needsFxPurchase: true,  // 需购汇还入外币
-  //   fxNote: '需提前购汇 USD 还入'
   // }
 
   // ---------- 📧 email 模型示例 (香港卡以后切换用；把某张卡的 model 改成 'email' 即可) ----------
@@ -236,8 +216,6 @@ export const ACCOUNTS = [
   //   emailDateOffsetDays: 2,   // 收件日减2天推定账单日(以后积累数据可调，见 email-parser.js 的口子)
   //   emailGraceDays: 21,       // 账单日+21天为还款日(以后按实测调，Pulse实测约24、Red约26)
   //   advanceDays: 3,
-  //   needsFxPurchase: false,
-  //   fxNote: ''
   // }
 ];
 
@@ -251,9 +229,6 @@ export const DEFAULT_CONFIG = {
   mergeSameDay: true,       // 是否合并同一天的多个账单为一个事件 —— 你的默认: 合并
   mergeTitleShowCount: 2,   // 合并标题最多展示几个"银行分段"，超出折叠成"等N笔"
   maxDistinctBanksInTitle: 2, // 合并标题里不同银行数超过此值 -> 降级为纯国家聚合(🇨🇳×2 🇭🇰×3)
-  pastMonths: 3,
-  futureMonths: 12,
-
   // exact 模式参数
   targetChinaHour: 9,
   targetChinaMinute: 30,
