@@ -55,19 +55,38 @@ console.log('A. 信用卡事件生成:结构自洽(账户/合并/VALARM)');
     }
     return blocks;
   };
-  // exact 默认:每个非诊断事件都应有 DTSTART 带时刻 + 至少一条 VALARM
+  // ⚠️ 提醒相关断言【一律从配置推导,绝不硬编码】——
+  //    config/ 是【用户领地】,exactReminders/allDayReminders 用户想改就改(改成几条、提前几分钟
+  //    都是他的自由),框架测试无权钉死它的值。钉了就会像 v5 那样悄悄烂掉:
+  //    配置从 [{0}] 改成 [{1}],测试还断言 '-PT0M' → CI 红,而代码一点错没有。
+  //    这里验的是【机制】(配置 → 提醒生效),不是【值】。
+  //    值的数学由 render.test.mjs R4 组用字面量钉死(beforeStartTrigger(0)==='-PT0M')——
+  //    两层不重叠:R4 管"算得对不对",这里管"接得通不通"。
+  const { DEFAULT_CONFIG } = await import('../config/card.js');
+  const { beforeStartTrigger, signedDurationTrigger } = await import('../src/renderer.js');
+
+  // exact 默认:每个非诊断事件都应有 DTSTART 带时刻 + 与配置条数一致的日历提醒
   let t = await (await call(hubWorker, '?cal=card&debug=0&testDate=2026-07-01')).text();
   let blocks = extractEventBlocks(t);
   ok(blocks.length > 0, 'exact 默认: 有信用卡事件产出');
   ok(blocks.every(b => b.some(l => /^DTSTART;TZID=Asia\/Shanghai:\d{8}T\d{6}$/.test(l))), 'exact: 每事件 DTSTART 带北京时刻');
-  ok(blocks.every(b => b.some(l => l === 'BEGIN:VALARM')), 'exact: 每事件含日历 VALARM(exactReminders 生效)');
-  ok(blocks.every(b => b.filter(l => l === 'BEGIN:VALARM').length === 1), '默认 exactReminders=[0]: 每事件恰 1 条 VALARM');
-  ok(t.includes('TRIGGER:-PT0M'), '默认准点: VALARM = -PT0M(不提前)');
-  // allday 模式:DTSTART 为 VALUE=DATE,VALARM 用带符号偏移
+  const exactCount = DEFAULT_CONFIG.exactReminders.length;
+  const expectExact = DEFAULT_CONFIG.exactReminders.map(r => `TRIGGER:${beforeStartTrigger(r.minutesBefore)}`);
+  ok(blocks.every(b => b.filter(l => l === 'BEGIN:VALARM').length === exactCount),
+     `exact: 每事件恰 ${exactCount} 条日历提醒(= config 的 exactReminders 条数;配 [] 则应为 0 条)`);
+  ok(expectExact.every(tr => t.includes(tr)),
+     `exact: 提醒 TRIGGER 与配置一致(期望 ${expectExact.join(' + ') || '(无)'})`);
+  // allday 模式:DTSTART 为 VALUE=DATE,提醒用带符号偏移(同样从配置推导)
   t = await (await call(hubWorker, '?cal=card&debug=0&mode=allday&testDate=2026-07-01')).text();
   blocks = extractEventBlocks(t);
+  const adCount = DEFAULT_CONFIG.allDayReminders.length;
+  const expectAllDay = DEFAULT_CONFIG.allDayReminders
+    .map(r => `TRIGGER:${signedDurationTrigger(r.dayOffset * 1440 + r.hour * 60 + r.minute)}`);
   ok(blocks.every(b => b.some(l => /^DTSTART;VALUE=DATE:\d{8}$/.test(l))), 'allday: DTSTART 为全天');
-  ok(blocks.some(b => b.some(l => /^TRIGGER:-?P/.test(l))), 'allday: VALARM 用 allDayReminders 的带符号偏移');
+  ok(blocks.every(b => b.filter(l => l === 'BEGIN:VALARM').length === adCount),
+     `allday: 每事件恰 ${adCount} 条日历提醒(= config 的 allDayReminders 条数)`);
+  ok(expectAllDay.every(tr => t.includes(tr)),
+     `allday: 提醒 TRIGGER 与配置一致(期望 ${expectAllDay.join(' + ') || '(无)'})`);
   // merge 语义:同日多账户默认合一
   t = await (await call(hubWorker, '?cal=card&debug=0&merge=1&testDate=2026-07-01')).text();
   const merged = extractEventBlocks(t).length;
