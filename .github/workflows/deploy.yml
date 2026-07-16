@@ -45,8 +45,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GH_PAT }}
 
-      - name: 运行测试(81 项;结构自洽/契约/口径避让/响亮降级)
-        run: node test/hub.test.mjs
+      - name: 运行测试(框架层 render.test + 域层 hub.test,红灯不部署)
+        run: npm test          # ⚠️ 必须走 npm test 而非单跑 hub.test —— v6 起测试链
+                               #    含 test/render.test.mjs(渲染器/治理/领地看守 65 项)
 
       - name: 发布 Worker 到 Cloudflare
         uses: cloudflare/wrangler-action@v3
